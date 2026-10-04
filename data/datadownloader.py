@@ -2,15 +2,21 @@ from database import DatabaseConnector
 import psycopg2
 import requests
 import pandas as pd
-
+from dotenv import load_dotenv
+import os
 class dataloader:
-    def __init__(self,api_key,api_secret,access_token):
-        self.api_key=api_key
-        self.api_secret=api_secret
-        self.access_token=access_token
+    def __init__(self):
         self.connecter=None
         self.df=None
         self.main_df=None
+        self.configure()
+        
+    def configure(self):
+        load_dotenv()
+
+        self.api_key = os.getenv("UPSTOX_API_KEY")
+        self.api_secret = os.getenv("UPSTOX_API_SECRET")
+        self.access_token = os.getenv("UPSTOX_ACCESS_TOKEN")
 
     def ticker(self):
 
@@ -18,10 +24,10 @@ class dataloader:
         self.connecter.initialize()
         cursor=self.connecter.conn.cursor()
 
-        cursor.execute("SELECT id,isin,instrument_key FROM securities")
+        cursor.execute("SELECT id,name,isin,instrument_key FROM securities")
         dummy=cursor.fetchall()
         cursor.close()
-        df=pd.DataFrame(dummy,columns=['id','isin','instrument_key'])
+        df=pd.DataFrame(dummy,columns=['id','name','isin','instrument_key'])
 
         self.df=df
 
@@ -46,7 +52,7 @@ class dataloader:
                     else:
                         # Print an error message if the request was not successful
                         print(f"Error: {response.status_code} - {response.text}")
-                        print(f"The isin number was not download{row["isin"]}")
+                        print(f"The isin number was not download {row["isin"]}:-{row['name']}")
                         continue
                     api_data = response.json()
 
@@ -67,6 +73,7 @@ class dataloader:
 
                     self.main_df["id"] = row["id"]
                     self.main_df["isin"] = row["isin"]
+                    self.main_df['name']=row['name']
 
                     database = self.connecter
                     cursor = database.conn.cursor()
@@ -77,7 +84,7 @@ class dataloader:
                             """
                             INSERT INTO stockprices
                             (security_id, isin, date_time, open_price, high_price,
-                            low_price, close_price, volume)
+                            low_price, close_price, volume,name)
                             VALUES
                             (%s,%s,%s,%s,%s,%s,%s,%s)
                             ON CONFLICT (security_id, date_time) DO NOTHING
@@ -90,12 +97,13 @@ class dataloader:
                                 candle["high"],
                                 candle["low"],
                                 candle["close"],
-                                candle["volume"]
+                                candle["volume"],
+                                candle['name']
                             )
                         )
 
                     database.conn.commit()
-                    print(f"data stored sucessfully for {row['isin']}")
+                    print(f"data stored sucessfully for {row['isin']}:-{row['name']}")
 
                 except Exception as e:
                     database.conn.rollback()
@@ -104,7 +112,7 @@ class dataloader:
                 finally:
                     cursor.close()
 print('1 started ')
-store=dataloader(api_key='2e0378af-d87f-4672-857b-c1654a4c9b44',api_secret='awvwmlemol',access_token='eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI4NEJIS1giLCJqdGkiOiI2YWI2MzUxY2I2MjNjMDc0YTZmNGJkOWUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc5MDMyNjA0NCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzkwMzczNjAwfQ.Ofeq6WE-0neDfBBWUKpaMemQSMzzCSqmc_CdndJknng')
+store=dataloader()
 print('2 started')
 store.ticker()
 print('3 started')
